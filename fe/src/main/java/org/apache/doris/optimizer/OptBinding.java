@@ -49,14 +49,14 @@ public class OptBinding {
         }
         // If MultiExpression's arity isn't equal with pattern's, return null
         int arity = mExpr.arity();
-        if (arity !=  pattern.arity()) {
+        if (arity <  pattern.arity()) {
             return null;
         }
         // we should binding children
         List<OptExpression> boundInputs = Lists.newArrayList();
         if (lastExpr == null) {
             for (int i = 0; i < arity; ++i) {
-                OptExpression inputPattern = pattern.getInput(i);
+                OptExpression inputPattern = extractPattern(pattern, i);
                 OptGroup inputGroup = mExpr.getInput(i);
 
                 OptExpression boundInput = bind(inputPattern, inputGroup, null);
@@ -105,8 +105,10 @@ public class OptBinding {
         MultiExpression mExpr;
         if (lastExpr != null) {
             mExpr = lastExpr.getMExpr();
-        } else {
+        } else if (group.isItemGroup()) {
             mExpr = group.getFirstMultiExpression();
+        }  else {
+            mExpr = group.getFirstLogicalMultiExpression();
         }
 
         // Fast path. When pattern is PatternLeaf and lastExpr is not null it means that
@@ -115,6 +117,10 @@ public class OptBinding {
         if (pattern.getOp().isPatternAndLeaf() && lastExpr != null) {
             return null;
         }
+//
+//        if (pattern.getOp().isPatternAndTree() || pattern.getOp().isPatternAndMultiTree()) {
+//
+//        }
 
         do {
             OptExpression expr = bind(pattern, mExpr, lastExpr);
@@ -122,7 +128,13 @@ public class OptBinding {
                 return expr;
             }
             lastExpr = null;
-            mExpr = mExpr.next();
+            if (group.isItemGroup()) {
+                group.getItemExpression();
+                mExpr = mExpr.next();
+            } else {
+                mExpr = group.nextLogicalExpr(mExpr);
+            }
+
         } while (mExpr != null);
         return null;
     }
