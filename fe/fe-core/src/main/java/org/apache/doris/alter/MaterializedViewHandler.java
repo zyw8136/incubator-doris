@@ -174,7 +174,7 @@ public class MaterializedViewHandler extends AlterHandler {
      */
     public void processCreateMaterializedView(CreateMaterializedViewStmt addMVClause, Database db, OlapTable olapTable)
             throws DdlException, AnalysisException {
-        olapTable.writeLock();
+        olapTable.writeLockOrDdlException();
         try {
             olapTable.checkStableAndNormal(db.getClusterName());
             if (olapTable.existTempPartitions()) {
@@ -229,7 +229,7 @@ public class MaterializedViewHandler extends AlterHandler {
         Map<String, RollupJobV2> rollupNameJobMap = new LinkedHashMap<>();
         // save job id for log
         Set<Long> logJobIdSet = new HashSet<>();
-        olapTable.writeLock();
+        olapTable.writeLockOrDdlException();
         try {
             if (olapTable.existTempPartitions()) {
                 throw new DdlException("Can not alter table when there are temp partitions in table");
@@ -708,7 +708,7 @@ public class MaterializedViewHandler extends AlterHandler {
 
     public void processBatchDropRollup(List<AlterClause> dropRollupClauses, Database db, OlapTable olapTable)
             throws DdlException, MetaNotFoundException {
-        olapTable.writeLock();
+        olapTable.writeLockOrDdlException();
         try {
             if (olapTable.existTempPartitions()) {
                 throw new DdlException("Can not alter table when there are temp partitions in table");
@@ -744,7 +744,7 @@ public class MaterializedViewHandler extends AlterHandler {
 
     public void processDropMaterializedView(DropMaterializedViewStmt dropMaterializedViewStmt, Database db,
             OlapTable olapTable) throws DdlException, MetaNotFoundException {
-        olapTable.writeLock();
+        olapTable.writeLockOrDdlException();
         try {
             // check table state
             if (olapTable.getState() != OlapTableState.NORMAL) {
@@ -881,7 +881,7 @@ public class MaterializedViewHandler extends AlterHandler {
         try {
             Database db = Catalog.getCurrentCatalog().getDbOrMetaException(dbId);
             OlapTable olapTable = db.getTableOrMetaException(tableId, Table.TableType.OLAP);
-            olapTable.writeLock();
+            olapTable.writeLockOrMetaException();
             try {
                 if (olapTable.getState() == olapTableState) {
                     return;

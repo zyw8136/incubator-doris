@@ -100,6 +100,8 @@ public class Database extends MetaObject implements Writable {
 
     private volatile long replicaQuotaSize;
 
+    private volatile boolean isDropped;
+
     public enum DbState {
         NORMAL, LINK, MOVE
     }
@@ -131,6 +133,14 @@ public class Database extends MetaObject implements Writable {
         this.dbEncryptKey = new DatabaseEncryptKey();
     }
 
+    public void markDropped() {
+        isDropped = true;
+    }
+
+    public void unmarkDropped() {
+        isDropped = false;
+    }
+
     public void readLock() {
         this.rwLock.readLock().lock();
     }
@@ -156,10 +166,26 @@ public class Database extends MetaObject implements Writable {
         }
     }
 
-    public boolean isWriteLockHeldByCurrentThread() {
-        return this.rwLock.writeLock().isHeldByCurrentThread();
+    public boolean writeLockIfExist() {
+        if (!isDropped) {
+            this.rwLock.writeLock().lock();
+            return true;
+        }
+        return false;
     }
 
+    public <E extends Exception> void writeLockOrException(E e) throws E {
+        writeLock();
+        if (isDropped) {
+            writeUnlock();
+            throw e;
+        }
+    }
+
+    public void writeLockOrDdlException() throws DdlException {
+        writeLockOrException(new DdlException("unknown db, dbName=" + fullQualifiedName));
+    }
+    
     public long getId() {
         return id;
     }
@@ -177,26 +203,16 @@ public class Database extends MetaObject implements Writable {
         }
     }
 
-    public void setDataQuotaWithLock(long newQuota) {
+    public void setDataQuota(long newQuota) {
         Preconditions.checkArgument(newQuota >= 0L);
         LOG.info("database[{}] set quota from {} to {}", fullQualifiedName, dataQuotaBytes, newQuota);
-        writeLock();
-        try {
-            this.dataQuotaBytes = newQuota;
-        } finally {
-            writeUnlock();
-        }
+        this.dataQuotaBytes = newQuota;
     }
 
-    public void setReplicaQuotaWithLock(long newQuota) {
+    public void setReplicaQuota(long newQuota) {
         Preconditions.checkArgument(newQuota >= 0L);
         LOG.info("database[{}] set replica quota from {} to {}", fullQualifiedName, replicaQuotaSize, newQuota);
-        writeLock();
-        try {
-            this.replicaQuotaSize = newQuota;
-        } finally {
-            writeUnlock();
-        }
+        this.replicaQuotaSize = newQuota;
     }
 
     public long getDataQuota() {
@@ -303,12 +319,12 @@ public class Database extends MetaObject implements Writable {
     }
 
     // return pair <success?, table exist?>
-    public Pair<Boolean, Boolean> createTableWithLock(Table table, boolean isReplay, boolean setIfNotExist) {
+    public Pair<Boolean, Boolean> createTableWithLock(Table table, boolean isReplay, boolean setIfNotExist) throws DdlException {
         boolean result = true;
         // if a table is already exists, then edit log won't be executed
         // some caller of this method may need to know this message
         boolean isTableExist = false;
-        writeLock();
+        writeLockOrDdlException();
         try {
             String tableName = table.getName();
             if (Catalog.isStoredTableNamesLowerCase()) {

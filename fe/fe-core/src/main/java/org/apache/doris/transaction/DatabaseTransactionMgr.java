@@ -718,7 +718,7 @@ public class DatabaseTransactionMgr {
         }
 
         List<Table> tableList = db.getTablesOnIdOrderOrThrowException(tableIdList);
-        MetaLockUtils.writeLockTables(tableList);
+        MetaLockUtils.writeLockTablesOrMetaException(tableList);
         try {
             boolean hasError = false;
             Iterator<TableCommitInfo> tableCommitInfoIterator = transactionState.getIdToTableCommitInfos().values().iterator();
