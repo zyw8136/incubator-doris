@@ -2859,10 +2859,10 @@ public class Catalog {
             // log
             RecoverInfo recoverInfo = new RecoverInfo(db.getId(), -1L, -1L);
             editLog.logRecoverDb(recoverInfo);
+            db.unmarkDropped();
             for (Table table : db.getTables()) {
                 table.unmarkDropped();
             }
-            db.unmarkDropped();
         } finally {
             unlock();
         }

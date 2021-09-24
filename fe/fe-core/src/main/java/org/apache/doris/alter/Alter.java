@@ -54,6 +54,7 @@ import org.apache.doris.common.DdlException;
 import org.apache.doris.common.MetaNotFoundException;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.util.DynamicPartitionUtil;
+import org.apache.doris.common.util.MetaLockUtils;
 import org.apache.doris.common.util.PropertyAnalyzer;
 import org.apache.doris.persist.AlterViewInfo;
 import org.apache.doris.persist.BatchModifyPartitionsInfo;
@@ -71,6 +72,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -360,7 +362,9 @@ public class Alter {
         try {
             Table newTbl = db.getTableOrMetaException(newTblName, TableType.OLAP);
             OlapTable olapNewTbl = (OlapTable) newTbl;
-            origTable.writeLock();
+            List<Table> tableList = Lists.newArrayList(origTable, newTbl);
+            tableList.sort((Comparator.comparing(Table::getId)));
+            MetaLockUtils.writeLockTables(tableList);
             try {
                 String oldTblName = origTable.getName();
                 // First, we need to check whether the table to be operated on can be renamed
@@ -374,7 +378,7 @@ public class Alter {
                 Catalog.getCurrentCatalog().getEditLog().logReplaceTable(log);
                 LOG.info("finish replacing table {} with table {}, is swap: {}", oldTblName, newTblName, swapTable);
             } finally {
-                origTable.writeUnlock();
+                MetaLockUtils.writeUnlockTables(tableList);
             }
         } finally {
             db.writeUnlock();
@@ -433,6 +437,7 @@ public class Alter {
         } else {
             // not swap, the origin table is not used anymore, need to drop all its tablets.
             Catalog.getCurrentCatalog().onEraseOlapTable(origTable, isReplay);
+            origTable.markDropped();
         }
     }
 
